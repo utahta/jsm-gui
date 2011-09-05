@@ -114,7 +114,7 @@ class SearchBrandDialog(QtGui.QDialog):
         self.close()
 
 class CCodeWidget(QtGui.QWidget):
-    """証券コード入力欄パーツ
+    """銘柄コード入力欄パーツ
     """
     def __init__(self):
         super(CCodeWidget, self).__init__()
@@ -123,12 +123,11 @@ class CCodeWidget(QtGui.QWidget):
         self.setup_event()
         
     def setup_ui(self):
-        self.label = QtGui.QLabel(u'証券コード')
         self.line_edit = QtGui.QLineEdit()
+        self.line_edit.setFixedWidth(80)
         self.button = QtGui.QPushButton(u'銘柄検索')
         
         layout = QtGui.QHBoxLayout()
-        layout.addWidget(self.label)
         layout.addWidget(self.line_edit)
         layout.addWidget(self.button)
         
@@ -140,6 +139,37 @@ class CCodeWidget(QtGui.QWidget):
     def on_show_search(self):
         self.search_brand.show()
 
+class SelectRangeWidget(QtGui.QWidget):
+    """レンジ選択パーツ
+    デイリー、ウィークリー、マンスリー
+    """
+    def __init__(self):
+        super(SelectRangeWidget, self).__init__()
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.combo = QtGui.QComboBox(self)
+        self.combo.addItem(u'デイリー')
+        self.combo.addItem(u'週間')
+        self.combo.addItem(u'月間')
+        self.combo.setSizeAdjustPolicy(self.combo.AdjustToContents)
+        
+        layout = QtGui.QHBoxLayout()
+        layout.addWidget(self.combo)
+        layout.addStretch()
+        
+        self.setLayout(layout)
+        
+    def get_range(self):
+        text = self.combo.currentText()
+        if text == u'デイリー':
+            return jsm.DAILY
+        elif text == u'週間':
+            return jsm.WEEKLY
+        elif text == u'月間':
+            return jsm.MONTHLY
+        return jsm.DAILY
+        
 class SavePriceWidget(QtGui.QWidget):
     """保存ボタンパーツ
     """
@@ -174,21 +204,29 @@ class SavePriceThread(QtCore.QThread):
         c.save_historical_prices(self.path, self.ccode, self.range, self.start_date, self.end_date, self.all)
         self.emit(QtCore.SIGNAL('saved'))
 
-class PriceWidget(QtGui.QWidget):
+class PriceTab(QtGui.QWidget):
     """株価取得タブ
     """
     def __init__(self):
-        super(PriceWidget, self).__init__()
+        super(PriceTab, self).__init__()
         self.thread = SavePriceThread()
         self.setup_ui()
         self.setup_event()
         
     def setup_ui(self):
         self.ccode = CCodeWidget()
+        self.range = SelectRangeWidget()
         self.save_price = SavePriceWidget()
         
-        layout = QtGui.QVBoxLayout()        
-        layout.addWidget(self.ccode)
+        layout = QtGui.QVBoxLayout()
+        
+        grid = QtGui.QGridLayout()
+        grid.addWidget(QtGui.QLabel(u'銘柄'), 0, 0)
+        grid.addWidget(self.ccode, 0, 1)
+        grid.addWidget(QtGui.QLabel(u'対象'), 1, 0)
+        grid.addWidget(self.range, 1, 1)
+        grid.setSpacing(0)
+        layout.addLayout(grid)
         layout.addWidget(self.save_price)
         
         self.setLayout(layout)
@@ -207,11 +245,12 @@ class PriceWidget(QtGui.QWidget):
     def on_save(self):
         ccode = self.ccode.line_edit.text()
         if not ccode:
-            QtGui.QMessageBox().warning(self, u'警告', u'証券コードを入力してください')
+            QtGui.QMessageBox().warning(self, u'警告', u'銘柄コードを入力してください')
             return
         if not re.match('\d\d\d\d', ccode):
-            QtGui.QMessageBox().warning(self, u'警告', u'証券コードを入力してください')
+            QtGui.QMessageBox().warning(self, u'警告', u'銘柄コードを入力してください')
             return
+        range = self.range.get_range()
         q = jsm.Quotes()
         try:
             result = q.search(ccode)
@@ -219,10 +258,10 @@ class PriceWidget(QtGui.QWidget):
             QtGui.QMessageBox().critical(self, u'エラー', u'不明なエラーが発生しました')
             return
         if not result:
-            QtGui.QMessageBox().warning(self, u'警告', u'不明な証券コードです')
+            QtGui.QMessageBox().warning(self, u'警告', u'不明な銘柄コードです')
             return
         path = QtGui.QFileDialog().getSaveFileName(self, u'保存先', '%s.csv' % ccode)
-        self.thread.save(path, ccode, jsm.DAILY)
+        self.thread.save(path, ccode, range)
         self.progress.show()
     
     def on_saved(self):
@@ -234,7 +273,7 @@ class TabWindow(QtGui.QTabWidget):
         self.setup_ui()
         
     def setup_ui(self):
-        self.addTab(PriceWidget(), u'株価')
+        self.addTab(PriceTab(), u'株価')
 
 class MainWindow(QtGui.QMainWindow):
     def __init__(self):
@@ -244,7 +283,6 @@ class MainWindow(QtGui.QMainWindow):
     def setup_ui(self):
         self.setCentralWidget(TabWindow())
         self.setWindowTitle(u'jsm GUI')
-        self.resize(350, 300)
 
 class Application(QtGui.QApplication):
     def __init__(self):
