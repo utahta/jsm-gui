@@ -6,6 +6,8 @@ import sys
 from PyQt4 import QtGui, QtCore
 import jsm
 import re
+import datetime
+import time
 
 class SearchBrandThread(QtCore.QThread):
     """銘柄検索スレッド
@@ -169,6 +171,77 @@ class SelectRangeWidget(QtGui.QWidget):
         elif text == u'月間':
             return jsm.MONTHLY
         return jsm.DAILY
+
+class CalendarDialog(QtGui.QDialog):
+    def __init__(self, date=None):
+        super(CalendarDialog, self).__init__()
+        self._date = date
+        self.setup_ui()
+        self.setup_event()
+        
+    def setup_ui(self):
+        self.calendar = QtGui.QCalendarWidget()
+        if isinstance(self._date, datetime.date):
+            self.calendar.setSelectedDate(QtCore.QDate(self._date.year, self._date.month, self._date.day))
+        today = datetime.date.today()
+        self.calendar.setMaximumDate(QtCore.QDate(today.year, today.month, today.day))
+
+        self.ok = QtGui.QPushButton(u'決定')
+        self.cancel = QtGui.QPushButton(u'キャンセル')
+        
+        layout = QtGui.QVBoxLayout()
+        layout.addWidget(self.calendar)
+        hbox = QtGui.QHBoxLayout()
+        hbox.addStretch(1)
+        hbox.addWidget(self.ok)
+        hbox.addWidget(self.cancel)
+        layout.addLayout(hbox)
+        
+        self.setLayout(layout)
+        
+    def setup_event(self):
+        self.cancel.clicked.connect(self.close)
+
+class DateWidget(QtGui.QWidget):
+        def __init__(self, date):
+            super(DateWidget, self).__init__()
+            self.date = date
+            self.setup_ui()
+            self.setup_event()
+            
+        def setup_ui(self):
+            self.label = QtGui.QLabel(self.date.strftime('%Y-%m-%d'))
+            self.button = QtGui.QPushButton(u'日付')
+            self.calendar = CalendarDialog(self.date)
+            
+            layout = QtGui.QHBoxLayout()
+            layout.addWidget(self.label)
+            layout.addWidget(self.button)
+            layout.addStretch()
+            
+            self.setLayout(layout)
+            
+        def setup_event(self):
+            self.button.clicked.connect(self._on_show_calendar)
+            self.calendar.ok.clicked.connect(self._on_calendar_clicked)
+            
+        def _on_show_calendar(self):
+            self.calendar.show()
+            
+        def _on_calendar_clicked(self):
+            self.date = self.calendar.calendar.selectedDate().toPyDate()
+            self.label.setText(self.date.strftime('%Y-%m-%d'))
+            self.calendar.close()
+                        
+class StartDateWidget(DateWidget):
+    """開始日時パーツ"""
+    def __init__(self):
+        super(StartDateWidget, self).__init__(datetime.date.fromtimestamp(time.time() - 2592000))
+
+class EndDateWidget(DateWidget):
+    """終了日時パーツ"""
+    def __init__(self):
+        super(EndDateWidget, self).__init__(datetime.date.today())
         
 class SavePriceWidget(QtGui.QWidget):
     """保存ボタンパーツ
@@ -216,6 +289,8 @@ class PriceTab(QtGui.QWidget):
     def setup_ui(self):
         self.ccode = CCodeWidget()
         self.range = SelectRangeWidget()
+        self.start_date = StartDateWidget()
+        self.end_date = EndDateWidget()
         self.save_price = SavePriceWidget()
         
         layout = QtGui.QVBoxLayout()
@@ -225,6 +300,10 @@ class PriceTab(QtGui.QWidget):
         grid.addWidget(self.ccode, 0, 1)
         grid.addWidget(QtGui.QLabel(u'対象'), 1, 0)
         grid.addWidget(self.range, 1, 1)
+        grid.addWidget(QtGui.QLabel(u'開始'), 2, 0)
+        grid.addWidget(self.start_date, 2, 1)
+        grid.addWidget(QtGui.QLabel(u'終了'), 3, 0)
+        grid.addWidget(self.end_date, 3, 1)
         grid.setSpacing(0)
         layout.addLayout(grid)
         layout.addWidget(self.save_price)
@@ -248,9 +327,11 @@ class PriceTab(QtGui.QWidget):
             QtGui.QMessageBox().warning(self, u'警告', u'銘柄コードを入力してください')
             return
         if not re.match('\d\d\d\d', ccode):
-            QtGui.QMessageBox().warning(self, u'警告', u'銘柄コードを入力してください')
+            QtGui.QMessageBox().warning(self, u'警告', u'銘柄コードは4桁の数字です')
             return
         range = self.range.get_range()
+        start_date = self.start_date.date
+        end_date = self.end_date.date
         q = jsm.Quotes()
         try:
             result = q.search(ccode)
@@ -260,9 +341,11 @@ class PriceTab(QtGui.QWidget):
         if not result:
             QtGui.QMessageBox().warning(self, u'警告', u'不明な銘柄コードです')
             return
-        path = QtGui.QFileDialog().getSaveFileName(self, u'保存先', '%s.csv' % ccode)
-        self.thread.save(path, ccode, range)
-        self.progress.show()
+        default_name = '%s%s_%s_%s.csv' % (ccode, ('d', 'w', 'm')[range], start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d'))
+        path = QtGui.QFileDialog().getSaveFileName(self, u'保存先', default_name)
+        if path:
+            self.thread.save(path, ccode, range, start_date, end_date)
+            self.progress.show()
     
     def on_saved(self):
         self.progress.hide()
