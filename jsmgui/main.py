@@ -15,6 +15,7 @@ class SearchBrandThread(QtCore.QThread):
     """
     def __init__(self):
         super(SearchBrandThread, self).__init__()
+        self.result_set = []
     
     def __del__(self):
         self.wait()
@@ -26,10 +27,10 @@ class SearchBrandThread(QtCore.QThread):
     def run(self):
         q = jsm.Quotes()
         try:
-            result_set = q.search(self.terms)
+            self.result_set = q.search(self.terms)
         except:
-            result_set = []
-        self.emit(QtCore.SIGNAL('searchEnd'), result_set)
+            self.result_set = []
+        self.emit(QtCore.SIGNAL('searchEnd()'))
 
 class SearchBrandDialog(QtGui.QDialog):
     """銘柄検索ダイアログ
@@ -49,8 +50,9 @@ class SearchBrandDialog(QtGui.QDialog):
         layout.addLayout(self.get_result_set_layout())
         layout.addLayout(self.get_ok_layout())
         self.setLayout(layout)
+        self.setWindowTitle(u'銘柄検索')
         
-        self.progress = QtGui.QProgressDialog(self, QtCore.Qt.CustomizeWindowHint)
+        self.progress = QtGui.QProgressDialog(self)
         self.progress.setLabelText(u'取得中...')
         self.progress.setModal(True)
         self.progress.setRange(0, 0)
@@ -85,12 +87,12 @@ class SearchBrandDialog(QtGui.QDialog):
     def setup_event(self):
         self.search.clicked.connect(self.on_search)
         self.cancel.clicked.connect(self.close)
-        self.connect(self.thread, QtCore.SIGNAL('searchEnd'),
+        self.connect(self.thread, QtCore.SIGNAL('searchEnd()'),
                      self.on_search_end)
         self.ok.clicked.connect(self.on_ok)
         
     def on_search(self):
-        terms = self.terms.text()
+        terms = unicode(self.terms.text()).encode('utf8')
         if not terms:
             QtGui.QMessageBox().warning(self, u'警告', u'コードまたは企業名を入力してください')
             return
@@ -98,11 +100,11 @@ class SearchBrandDialog(QtGui.QDialog):
         self.progress.show()
         self.thread.search(terms) # 裏で実行
     
-    def on_search_end(self, result_set):
+    def on_search_end(self):
         self.progress.hide()
         self.result_set.clear()
-        for res in result_set:
-            self.result_set.addItem(u'%s %s' % (res.ccode, res.name))
+        for res in self.thread.result_set:
+            self.result_set.addItem(u'%s %s' % (res.ccode, res.name.decode('utf8')))
             
     def on_ok(self):
         items = self.result_set.selectedItems()
@@ -176,8 +178,8 @@ class CalendarDialog(QtGui.QDialog):
     def __init__(self, date=None):
         super(CalendarDialog, self).__init__()
         self._date = date
+        self.setModal(True)
         self.setup_ui()
-        self.setup_event()
         
     def setup_ui(self):
         self.calendar = QtGui.QCalendarWidget()
@@ -192,16 +194,14 @@ class CalendarDialog(QtGui.QDialog):
         layout = QtGui.QVBoxLayout()
         layout.addWidget(self.calendar)
         hbox = QtGui.QHBoxLayout()
-        hbox.addStretch(1)
+        hbox.addStretch()
         hbox.addWidget(self.ok)
         hbox.addWidget(self.cancel)
         layout.addLayout(hbox)
         
         self.setLayout(layout)
+        self.setWindowTitle(u'日付')
         
-    def setup_event(self):
-        self.cancel.clicked.connect(self.close)
-
 class DateWidget(QtGui.QWidget):
         def __init__(self, date):
             super(DateWidget, self).__init__()
@@ -222,8 +222,9 @@ class DateWidget(QtGui.QWidget):
             self.setLayout(layout)
             
         def setup_event(self):
-            self.button.clicked.connect(self._on_show_calendar)
             self.calendar.ok.clicked.connect(self._on_calendar_clicked)
+            self.calendar.cancel.clicked.connect(self.calendar.close)
+            self.button.clicked.connect(self._on_show_calendar)
             
         def _on_show_calendar(self):
             self.calendar.show()
@@ -310,7 +311,7 @@ class PriceTab(QtGui.QWidget):
         
         self.setLayout(layout)
         
-        self.progress = QtGui.QProgressDialog(self, QtCore.Qt.CustomizeWindowHint)
+        self.progress = QtGui.QProgressDialog(self)
         self.progress.setLabelText(u'保存中...')
         self.progress.setModal(True)
         self.progress.setRange(0, 0)
@@ -365,7 +366,7 @@ class MainWindow(QtGui.QMainWindow):
         
     def setup_ui(self):
         self.setCentralWidget(TabWindow())
-        self.setWindowTitle(u'jsm GUI')
+        self.setWindowTitle(u'jsm')
 
 class Application(QtGui.QApplication):
     def __init__(self):
