@@ -9,6 +9,13 @@ import re
 import datetime
 import time
 
+class ProgressDialog(QtGui.QProgressDialog):
+    """ignore closeEvent..."""
+    def __init__(self):
+        super(ProgressDialog, self).__init__()
+    def closeEvent(self, event):
+        event.ignore()
+
 class SearchBrandThread(QtCore.QThread):
     """銘柄検索スレッド
     裏で実行。。。
@@ -52,7 +59,7 @@ class SearchBrandDialog(QtGui.QDialog):
         self.setLayout(layout)
         self.setWindowTitle(u'銘柄検索')
         
-        self.progress = QtGui.QProgressDialog(self)
+        self.progress = ProgressDialog()
         self.progress.setLabelText(u'取得中...')
         self.progress.setModal(True)
         self.progress.setRange(0, 0)
@@ -92,7 +99,7 @@ class SearchBrandDialog(QtGui.QDialog):
         self.ok.clicked.connect(self.on_ok)
         
     def on_search(self):
-        terms = unicode(self.terms.text()).encode('utf8')
+        terms = unicode(self.terms.text())
         if not terms:
             QtGui.QMessageBox().warning(self, u'警告', u'コードまたは企業名を入力してください')
             return
@@ -311,7 +318,7 @@ class PriceTab(QtGui.QWidget):
         
         self.setLayout(layout)
         
-        self.progress = QtGui.QProgressDialog(self)
+        self.progress = ProgressDialog()
         self.progress.setLabelText(u'保存中...')
         self.progress.setModal(True)
         self.progress.setRange(0, 0)
@@ -323,7 +330,7 @@ class PriceTab(QtGui.QWidget):
                      self.on_saved)
         
     def on_save(self):
-        ccode = self.ccode.line_edit.text()
+        ccode = unicode(self.ccode.line_edit.text())
         if not ccode:
             QtGui.QMessageBox().warning(self, u'警告', u'銘柄コードを入力してください')
             return
@@ -345,7 +352,7 @@ class PriceTab(QtGui.QWidget):
         default_name = '%s%s_%s_%s.csv' % (ccode, ('d', 'w', 'm')[range], start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d'))
         path = QtGui.QFileDialog().getSaveFileName(self, u'保存先', default_name)
         if path:
-            self.thread.save(path, ccode, range, start_date, end_date)
+            self.thread.save(unicode(path), ccode, range, start_date, end_date)
             self.progress.show()
     
     def on_saved(self):
